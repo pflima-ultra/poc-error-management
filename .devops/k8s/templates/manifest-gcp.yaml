@@ -1,0 +1,138 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${APP_NAME}-svc
+  namespace: ${KUBE_ENV}-env
+  labels:
+    monitoring: "true"
+spec:
+  ports:
+  - protocol: TCP
+    name: http
+    port: _COMPONENT_PORT_
+    targetPort: _COMPONENT_PORT_
+  selector:
+    app.kubernetes.io/name: ${APP_NAME}-deployment
+    app.kubernetes.io/part-of: backend
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${APP_NAME}-kafka-ssl
+  namespace: ${KUBE_ENV}-env
+type: Opaque
+data:
+  ca.pem: ${KAFKA_CA_CERT}
+  user.cert: ${KAFKA_USER_CERT}
+  user.key: ${KAFKA_USER_KEY}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${APP_NAME}-deployment
+  namespace: ${KUBE_ENV}-env
+  labels:
+    app.kubernetes.io/name: ${APP_NAME}-deployment
+    app.kubernetes.io/part-of: backend
+spec:
+  replicas: ${REPLICAS}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ${APP_NAME}-deployment
+      app.kubernetes.io/part-of: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ${APP_NAME}-deployment
+        app.kubernetes.io/part-of: backend
+    spec:
+      containers:
+      - name: ${APP_NAME}
+        resources:
+          requests:
+            cpu: ${CPU_REQUEST}
+            memory: ${MEMORY_REQUEST}
+          limits:
+            cpu: ${CPU_LIMIT}
+            memory: ${MEMORY_LIMIT}
+        image: ${KUBE_APP_IMAGE}
+        imagePullPolicy: "IfNotPresent"
+        envFrom:
+          - configMapRef:
+              name: ${APP_NAME}-cm
+        ports:
+          - name: probe-port
+            containerPort: _COMPONENT_PORT_
+        readinessProbe:
+          httpGet:
+            path: /explorer/_COMPONENT_NAME_/v1/ready
+            port: probe-port
+          initialDelaySeconds: 8
+          periodSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /explorer/_COMPONENT_NAME_/v1/health
+            port: probe-port
+          initialDelaySeconds: 60
+          periodSeconds: 3
+        volumeMounts:
+          - name: kafka-ssl
+            mountPath: /kafka
+            readOnly: true
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 10
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: ${APP_NAME}-deployment
+                    app.kubernetes.io/part-of: backend
+                topologyKey: kubernetes.io/hostname
+      nodeSelector:
+        role: application
+      volumes:
+        - name: kafka-ssl
+          secret:
+            secretName: ${APP_NAME}-kafka-ssl
+---
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /graphql
+    cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+  name: ${APP_NAME}-ing
+  namespace: ${KUBE_ENV}-env
+spec:
+  rules:
+  - host: ${BACKEND_URL}
+    http:
+      paths:
+      - path: /explorer/_COMPONENT_NAME_/v1
+        backend:
+          serviceName: ${APP_NAME}-svc
+          servicePort: http
+  tls:
+  - hosts:
+    - ${BACKEND_URL}
+    secretName: ${KUBE_ENV}-api-ultra-io-cert
+---
+apiVersion: autoscaling/v2beta1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ${APP_NAME}-hpa
+  namespace: ${KUBE_ENV}-env
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ${APP_NAME}-deployment
+  minReplicas: ${HPA_MIN_REPLICAS}
+  maxReplicas: ${HPA_MAX_REPLICAS}
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      targetAverageUtilization: ${HPA_TARGET_CPU_UTILIZATION}

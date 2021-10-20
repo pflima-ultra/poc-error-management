@@ -1,0 +1,73 @@
+include:
+  - project: 'ultraio/backend-deployment'
+    ref: master
+    file: 'src/gitlab/ci-templates/.backends.yml'
+
+# Test
+
+build-test:
+  extends: .tests
+  variables:
+    KAFKA_CREATE_TOPICS: ''
+
+# Build
+
+createDockerImage:
+  extends:
+    - .build-docker-image
+    - .dev-context
+
+createReleaseImage:
+  extends:
+    - .build-release-image
+    - .dev-context
+
+# Dev
+
+deployDev:
+  extends:
+    - .deploy
+    - .deploy-develop
+
+releaseDev:
+  extends:
+    - .deploy
+    - .release-develop
+
+# Test
+
+releaseTest:
+  extends:
+    - .deploy
+    - .release-test
+
+# QA
+
+releaseQa:
+  extends:
+    - .deploy
+    - .release-qa
+
+# Staging
+
+promoteReleaseStaging:
+  extends:
+    - .promote-release
+    - .staging-context
+
+releaseStaging:
+  extends:
+    - .deploy
+    - .release-staging
+
+# Prod
+
+promoteReleaseProd:
+  extends:
+    - .promote-release
+    - .production-context
+
+releaseProduction:
+  extends:
+    - .deploy
+    - .release-production

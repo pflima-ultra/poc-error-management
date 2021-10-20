@@ -1,0 +1,19 @@
+version: '3'
+services:
+  mongodb-primary:
+    # admin credentials: root/ultrapass
+    image: 'eu.gcr.io/acoustic-arch-243714/mongodb-rs:primary-latest'
+    container_name: mongodb-primary
+    hostname: mongodb-primary
+    ports:
+      - "127.0.0.1:27018:27017"
+  mongodb-secondary:
+    image: 'eu.gcr.io/acoustic-arch-243714/mongodb-rs:secondary-latest'
+    container_name: mongodb-secondary
+    depends_on:
+      - mongodb-primary
+  mongodb-arbiter:
+    image: 'eu.gcr.io/acoustic-arch-243714/mongodb-rs:arbiter-latest'
+    container_name: mongodb-arbiter
+    depends_on:
+      - mongodb-primary

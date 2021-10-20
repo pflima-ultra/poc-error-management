@@ -1,0 +1,6 @@
+{
+  "hooks": {
+    "commit-msg": "node node_modules/@ultraos/common-tools/lib/git-hooks/check-commit-name.js",
+    "pre-push": "node node_modules/@ultraos/common-tools/lib/git-hooks/check-branch-name.js"
+  }
+}
